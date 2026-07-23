@@ -1,0 +1,11 @@
+{
+  "name": "token-burn",
+  "version": "0.1.0",
+  "description": "A GitHub-contributions-style dashboard of the tokens your coding agents burn every day. Zero deps, no backend: local logs -> static JSON -> GitHub Pages.",
+  "type": "module",
+  "bin": { "token-burn": "bin/token-burn.mjs" },
+  "engines": { "node": ">=18" },
+  "license": "MIT",
+  "repository": "github:hongnoul/token-burn",
+  "keywords": ["tokens", "heatmap", "dashboard", "claude-code", "jcode", "ai-agents", "usage"]
+}

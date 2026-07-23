@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>token burn</title>
+  <meta name="description" content="A GitHub-contributions-style dashboard of the tokens coding agents burn every day. Static JSON, no backend.">
+  <meta property="og:title" content="token burn">
+  <meta property="og:description" content="The tokens my coding agents burn, every day.">
+  <meta name="theme-color" content="#fafafa">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%A5%3C/text%3E%3C/svg%3E">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --bg: #fafafa; --fg: #111; --muted: #898989; --line: #e4e4e4;
+      --soft: #eee; --card: #fff; --hot: #ff2400; --hot-bg: #fff7f5;
+      --ramp0: #efefef; --ramp1: #ffd3c9; --ramp2: #ff9c85; --ramp3: #ff5c3a; --ramp4: #e01e00;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101010; --fg: #ececec; --muted: #8a8a8a; --line: #2a2a2a;
+        --soft: #222; --card: #161616; --hot: #ff4526; --hot-bg: #1f1512;
+        --ramp0: #1f1f1f; --ramp1: #56201a; --ramp2: #9c3123; --ramp3: #e0492d; --ramp4: #ff2400;
+      }
+    }
+    html, body { margin: 0; background: var(--bg); }
+    body {
+      color: var(--fg);
+      font: 400 16px/1.55 system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    ::selection { background: var(--hot); color: #fff; }
+    a { color: inherit; text-decoration-color: var(--muted); text-underline-offset: 3px; }
+    a:hover { color: var(--hot); text-decoration-color: var(--hot); }
+    code { font: 400 0.88em ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+
+    .wrap { max-width: 840px; margin: 0 auto; padding: 0 24px 120px; }
+
+    header { padding-top: 72px; margin-bottom: 56px; }
+    .kicker {
+      font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--muted); margin: 0 0 18px;
+    }
+    .kicker b { color: var(--hot); font-weight: 500; }
+    h1 {
+      font-size: clamp(32px, 6vw, 50px); font-weight: 650; letter-spacing: -0.025em;
+      line-height: 1.06; margin: 0 0 18px; text-wrap: balance;
+    }
+    .lede { font-size: clamp(16px, 2.2vw, 19px); line-height: 1.5; color: var(--muted); margin: 0; text-wrap: pretty; max-width: 60ch; }
+
+    section { margin: 64px 0 0; }
+    h2 {
+      font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--muted); margin: 0 0 20px;
+      display: flex; align-items: baseline; gap: 12px;
+    }
+    h2::after { content: ""; flex: 1; height: 1px; background: var(--line); transform: translateY(-3px); }
+
+    .today { display: flex; flex-wrap: wrap; border: 1px solid var(--line); background: var(--card); border-radius: 10px; overflow: hidden; }
+    .today__cell { flex: 1 1 150px; padding: 22px 22px 18px; border-right: 1px solid var(--soft); min-width: 0; }
+    .today__cell:last-child { border-right: 0; }
+    .today__label {
+      font-size: 10.5px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--muted); margin: 0 0 6px; white-space: nowrap;
+    }
+    .today__num {
+      font-size: clamp(22px, 3.4vw, 34px); font-weight: 650; letter-spacing: -0.02em;
+      line-height: 1.1; margin: 0; font-variant-numeric: tabular-nums;
+    }
+    .today__num.hot { color: var(--hot); }
+    .today__sub { font-size: 12px; color: var(--muted); margin: 4px 0 0; font-variant-numeric: tabular-nums; }
+    @media (max-width: 560px) {
+      .today__cell { flex-basis: 50%; border-bottom: 1px solid var(--soft); }
+      .today__cell:nth-child(2n) { border-right: 0; }
+      .today__cell:nth-last-child(-n+2) { border-bottom: 0; }
+    }
+
+    .map-card { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 20px 20px 16px; }
+    .map-scroll { overflow-x: auto; }
+    .map-grid .cell:hover { stroke: var(--fg); stroke-width: 1; }
+    .map-foot {
+      display: flex; align-items: center; gap: 8px; margin-top: 12px;
+      font-size: 11.5px; color: var(--muted); user-select: none;
+    }
+    .map-foot .scale { display: flex; gap: 3px; margin: 0 2px; }
+    .map-foot .scale i { width: 11px; height: 11px; display: block; border-radius: 2px; }
+    .map-foot .spacer { flex: 1; }
+
+    .tip {
+      position: fixed; z-index: 80; pointer-events: none;
+      background: rgba(10, 12, 15, 0.92); color: #e8e8e8;
+      border: 1px solid rgba(255,255,255,0.14); border-radius: 6px;
+      padding: 8px 11px; font-size: 12px; line-height: 1.5;
+      font-variant-numeric: tabular-nums;
+      opacity: 0; transform: translateY(3px);
+      transition: opacity .12s ease, transform .12s ease;
+      max-width: 260px; backdrop-filter: blur(4px);
+    }
+    .tip.show { opacity: 1; }
+    .tip b { color: #fff; }
+    .tip .hot { color: #ff6a52; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+    th, td { text-align: right; padding: 10px 0 10px 14px; border-bottom: 1px solid var(--soft); white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; padding-left: 0; }
+    th { font-size: 11px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+    td.date { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
+    td.total { font-weight: 650; }
+    tr.today-row td { background: var(--hot-bg); }
+    tr.today-row td.total { color: var(--hot); }
+    .bar { display: inline-block; height: 8px; background: var(--hot); vertical-align: baseline; margin-right: 8px; min-width: 1px; border-radius: 2px; }
+    .tbl-note { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+    .tbl-more { margin-top: 14px; }
+    .tbl-more button {
+      font: 500 12px/1 system-ui, sans-serif; letter-spacing: .04em;
+      color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 6px;
+      padding: 8px 14px; cursor: pointer;
+    }
+    .tbl-more button:hover { color: var(--hot); border-color: var(--hot); }
+    @media (max-width: 560px) {
+      th:nth-child(n+3):not(:last-child), td:nth-child(n+3):not(:last-child) { display: none; }
+    }
+
+    footer {
+      margin-top: 96px; padding-top: 22px; border-top: 1px solid var(--line);
+      font-size: 13px; color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <header>
+      <p class="kicker"><b>token burn</b> · <span id="kicker-updated">loading…</span> · <a href="https://github.com/hongnoul/token-burn">github</a></p>
+      <h1>The tokens my agents burn, every day.</h1>
+      <p class="lede">
+        A commit graph counts keystrokes. This counts the work coding agents did:
+        every token in and out, aggregated per day from local session logs and
+        published as a static JSON blob. No backend, no analytics, just
+        <code>git push</code>.
+      </p>
+    </header>
+
+    <section aria-labelledby="today-h">
+      <h2 id="today-h">Today</h2>
+      <div class="today">
+        <div class="today__cell">
+          <p class="today__label">🔥 burned today</p>
+          <p class="today__num hot" id="t-total">—</p>
+          <p class="today__sub" id="t-total-full"></p>
+        </div>
+        <div class="today__cell">
+          <p class="today__label">Input · output</p>
+          <p class="today__num" id="t-io">—</p>
+          <p class="today__sub" id="t-io-sub"></p>
+        </div>
+        <div class="today__cell">
+          <p class="today__label">Cache read · write</p>
+          <p class="today__num" id="t-cache">—</p>
+          <p class="today__sub" id="t-cache-sub"></p>
+        </div>
+        <div class="today__cell">
+          <p class="today__label">All-time</p>
+          <p class="today__num" id="t-alltime">—</p>
+          <p class="today__sub" id="t-days"></p>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="map-h">
+      <h2 id="map-h">The last 12 months</h2>
+      <div class="map-card">
+        <div class="map-scroll">
+          <svg class="map-grid" id="heatmap" role="img" aria-label="Daily token usage heatmap"></svg>
+        </div>
+        <div class="map-foot">
+          <span id="map-summary"></span>
+          <span class="spacer"></span>
+          <span>less</span>
+          <span class="scale" id="map-scale"></span>
+          <span>more</span>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="days-h">
+      <h2 id="days-h">Day by day</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th><th>Input</th><th>Output</th>
+            <th>Cache read</th><th>Cache write</th><th>Total</th>
+          </tr>
+        </thead>
+        <tbody id="day-rows"></tbody>
+      </table>
+      <div class="tbl-more" id="tbl-more" hidden><button type="button">Show all days</button></div>
+      <p class="tbl-note">
+        Cache reads dominate because agentic loops replay long contexts on every
+        provider call. “Fresh” tokens (input + output) are the smaller, pricier slice.
+      </p>
+    </section>
+
+    <footer>
+      Data: <a href="./data/tokens.json">tokens.json</a> — dates and counts only,
+      never prompts or code. Updated daily by
+      <a href="https://github.com/hongnoul/token-burn">token-burn</a>,
+      sources: <span id="f-sources">…</span>.
+    </footer>
+
+  </div>
+
+  <div class="tip" id="tip" role="tooltip"></div>
+
+  <script>
+    const fmt = n => n.toLocaleString('en-US');
+    const human = n =>
+      n >= 1e9 ? (n / 1e9).toFixed(2) + 'B'
+      : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M'
+      : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k'
+      : String(n);
+    const isoLocal = d => {
+      const p = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    };
+    const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+    const RAMP = ['--ramp0','--ramp1','--ramp2','--ramp3','--ramp4'].map(css);
+
+    async function main() {
+      let data;
+      try {
+        data = await (await fetch('./data/tokens.json', { cache: 'no-cache' })).json();
+      } catch {
+        document.getElementById('kicker-updated').textContent = 'data unavailable';
+        return;
+      }
+      const days = data.days || {};
+      const dates = Object.keys(days).sort();
+      const total = d => (days[d] || [0,0,0,0]).reduce((a, b) => a + b, 0);
+
+      document.getElementById('kicker-updated').textContent =
+        'updated ' + new Date(data.updated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      document.getElementById('f-sources').textContent = (data.sources || []).join(', ') || 'unknown';
+
+      const todayIso = isoLocal(new Date());
+      const showDay = days[todayIso] ? todayIso : dates[dates.length - 1];
+      const [inp, out, cr, cw] = days[showDay] || [0,0,0,0];
+      const dayTotal = inp + out + cr + cw;
+      const allTime = dates.reduce((a, d) => a + total(d), 0);
+
+      document.getElementById('t-total').textContent = human(dayTotal);
+      document.getElementById('t-total-full').textContent =
+        fmt(dayTotal) + (showDay === todayIso ? ' tokens' : ' on ' + showDay);
+      document.getElementById('t-io').textContent = human(inp) + ' · ' + human(out);
+      document.getElementById('t-io-sub').textContent = fmt(inp) + ' in, ' + fmt(out) + ' out';
+      document.getElementById('t-cache').textContent = human(cr) + ' · ' + human(cw);
+      document.getElementById('t-cache-sub').textContent =
+        ((cr / Math.max(1, dayTotal)) * 100).toFixed(1) + '% of the day is cache reads';
+      document.getElementById('t-alltime').textContent = human(allTime);
+      document.getElementById('t-days').textContent =
+        'across ' + dates.length + ' active day' + (dates.length === 1 ? '' : 's');
+
+      renderHeatmap(days, total);
+      renderTable(dates, days, total);
+    }
+
+    function renderHeatmap(days, total) {
+      const CELL = 12, GAP = 3, STEP = CELL + GAP;
+      const LEFT = 30, TOP = 18;
+      const end = new Date(); end.setHours(0,0,0,0);
+      const start = new Date(end); start.setDate(start.getDate() - 364);
+      start.setDate(start.getDate() - start.getDay());
+      const weeks = Math.ceil(((end - start) / 864e5 + 1) / 7);
+
+      const svg = document.getElementById('heatmap');
+      const W = LEFT + weeks * STEP, H = TOP + 7 * STEP;
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      svg.setAttribute('width', W); svg.setAttribute('height', H);
+
+      const max = Math.max(1, ...Object.keys(days).map(total));
+      const level = v => v <= 0 ? 0 : 1 + Math.min(3, Math.floor((Math.log(v + 1) / Math.log(max + 1)) * 4));
+
+      const NS = 'http://www.w3.org/2000/svg';
+      const frag = document.createDocumentFragment();
+      const monthFmt = new Intl.DateTimeFormat('en-US', { month: 'short' });
+
+      [['Mon',1],['Wed',3],['Fri',5]].forEach(([label, row]) => {
+        const t = document.createElementNS(NS, 'text');
+        t.textContent = label;
+        t.setAttribute('x', LEFT - 6);
+        t.setAttribute('y', TOP + row * STEP + CELL - 2.5);
+        t.setAttribute('text-anchor', 'end');
+        t.setAttribute('font-size', '9');
+        t.setAttribute('fill', css('--muted'));
+        frag.appendChild(t);
+      });
+
+      let lastMonth = -1;
+      const cur = new Date(start);
+      for (let w = 0; w < weeks; w++) {
+        const m = cur.getMonth();
+        if (m !== lastMonth && cur.getDate() <= 7) {
+          const t = document.createElementNS(NS, 'text');
+          t.textContent = monthFmt.format(cur);
+          t.setAttribute('x', LEFT + w * STEP);
+          t.setAttribute('y', TOP - 7);
+          t.setAttribute('font-size', '9');
+          t.setAttribute('fill', css('--muted'));
+          frag.appendChild(t);
+          lastMonth = m;
+        }
+        for (let d = 0; d < 7; d++) {
+          if (cur > end) break;
+          const iso = isoLocal(cur);
+          const v = days[iso] ? total(iso) : 0;
+          const r = document.createElementNS(NS, 'rect');
+          r.setAttribute('class', 'cell');
+          r.setAttribute('x', LEFT + w * STEP);
+          r.setAttribute('y', TOP + d * STEP);
+          r.setAttribute('width', CELL);
+          r.setAttribute('height', CELL);
+          r.setAttribute('rx', 2.5);
+          r.setAttribute('fill', RAMP[level(v)]);
+          r.dataset.date = iso;
+          r.dataset.tokens = v;
+          frag.appendChild(r);
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+      svg.replaceChildren(frag);
+
+      const scroller = svg.closest('.map-scroll');
+      scroller.scrollLeft = scroller.scrollWidth;
+
+      const yearTotal = Object.keys(days)
+        .filter(d => d >= isoLocal(start))
+        .reduce((a, d) => a + total(d), 0);
+      document.getElementById('map-summary').textContent =
+        human(yearTotal) + ' tokens in the last year';
+      document.getElementById('map-scale').innerHTML =
+        RAMP.map(c => `<i style="background:${c}"></i>`).join('');
+
+      const tip = document.getElementById('tip');
+      const dateFmt = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      svg.addEventListener('pointermove', e => {
+        const cell = e.target.closest('.cell');
+        if (!cell) { tip.classList.remove('show'); return; }
+        const v = +cell.dataset.tokens;
+        const d = days[cell.dataset.date];
+        tip.innerHTML =
+          `<b>${dateFmt.format(new Date(cell.dataset.date + 'T00:00:00'))}</b><br>` +
+          (v ? `<span class="hot">${fmt(v)} tokens</span><br>` +
+               `${human(d[0])} in · ${human(d[1])} out · ${human(d[2])} cache`
+             : 'no burn');
+        tip.classList.add('show');
+        const r = tip.getBoundingClientRect();
+        tip.style.left = Math.min(window.innerWidth - r.width - 10, e.clientX + 14) + 'px';
+        tip.style.top = (e.clientY - r.height - 12 < 0 ? e.clientY + 18 : e.clientY - r.height - 12) + 'px';
+      });
+      svg.addEventListener('pointerleave', () => tip.classList.remove('show'));
+    }
+
+    function renderTable(dates, days, total) {
+      const tbody = document.getElementById('day-rows');
+      const more = document.getElementById('tbl-more');
+      const todayIso = isoLocal(new Date());
+      const max = Math.max(1, ...dates.map(total));
+      const LIMIT = 30;
+      const render = n => {
+        tbody.innerHTML = [...dates].reverse().slice(0, n).map(d => {
+          const [i, o, cr, cw] = days[d];
+          const t = total(d);
+          return `<tr${d === todayIso ? ' class="today-row"' : ''}>
+            <td class="date">${d}</td>
+            <td>${human(i)}</td><td>${human(o)}</td>
+            <td>${human(cr)}</td><td>${human(cw)}</td>
+            <td class="total"><span class="bar" style="width:${(t / max) * 72}px"></span>${human(t)}</td>
+          </tr>`;
+        }).join('');
+      };
+      render(LIMIT);
+      if (dates.length > LIMIT) {
+        more.hidden = false;
+        more.querySelector('button').addEventListener('click', () => {
+          render(Infinity);
+          more.hidden = true;
+        }, { once: true });
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>
